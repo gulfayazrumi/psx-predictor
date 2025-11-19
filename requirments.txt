@@ -1,0 +1,6 @@
+pandas
+numpy
+plotly
+streamlit
+requests
+python-dateutil

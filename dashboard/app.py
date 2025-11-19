@@ -1,102 +1,22 @@
-"""
-PSX Stock Predictor Dashboard - Complete Working Version
-100% Fixed - Shows Live Prices
-"""
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 from pathlib import Path
-from datetime import datetime
-import numpy as np
+from datetime import datetime, timedelta
 
-# Page configuration
+# Page config
 st.set_page_config(
-    page_title="PSX AI Trading",
+    page_title="PSX AI Trading System",
     page_icon="📊",
     layout="wide"
 )
 
-# Custom CSS
-st.markdown("""
-<style>
-    .main-header {
-        font-size: 2.5rem;
-        font-weight: bold;
-        color: #1f77b4;
-        text-align: center;
-        padding: 1rem 0;
-    }
-    .metric-card {
-        background: #rgb(14, 17, 23);
-        padding: 1rem;
-        border-radius: 0.5rem;
-        text-align: center;
-    }
-    .stMetric {
-        background-color: #rgb(14, 17, 23);
-        padding: 10px;
-        border-radius: 5px;
-    }
-</style>
-""", unsafe_allow_html=True)
-
-
-@st.cache_data(ttl=60)
-def load_predictions():
-    """Load predictions from updated signals file"""
-    
-    # Primary source: Updated signals with live prices
-    signals_file = Path("reports/trading_signals.csv")
-    
-    if signals_file.exists():
-        try:
-            df = pd.read_csv(signals_file)
-            
-            # Ensure numeric columns
-            numeric_cols = ['current_price', 'predicted_price', 'price_change', 
-                          'percent_change', 'confidence']
-            
-            for col in numeric_cols:
-                if col in df.columns:
-                    df[col] = pd.to_numeric(df[col], errors='coerce')
-            
-            # Rename percent_change to change_pct if needed
-            if 'percent_change' in df.columns and 'change_pct' not in df.columns:
-                df = df.rename(columns={'percent_change': 'change_pct'})
-            
-            # Add recommendation if missing
-            if 'recommendation' not in df.columns:
-                df['recommendation'] = 'HOLD'
-            
-            # Remove rows with critical NaN values
-            df = df.dropna(subset=['symbol', 'current_price', 'predicted_price'])
-            
-            return df
-            
-        except Exception as e:
-            st.error(f"Error loading signals: {e}")
-            return pd.DataFrame()
-    
-    # Fallback: Try signals_enhanced.csv
-    enhanced_file = Path("reports/signals_enhanced.csv")
-    if enhanced_file.exists():
-        try:
-            df = pd.read_csv(enhanced_file)
-            
-            # Ensure numeric
-            numeric_cols = ['current_price', 'predicted_price', 'change_pct', 'confidence']
-            for col in numeric_cols:
-                if col in df.columns:
-                    df[col] = pd.to_numeric(df[col], errors='coerce')
-            
-            df = df.dropna(subset=['symbol', 'current_price'])
-            return df
-            
-        except Exception as e:
-            pass
-    
-    return pd.DataFrame()
-
+def load_signals():
+    """Load trading signals"""
+    signals_path = Path("reports/trading_signals.csv")
+    if signals_path.exists():
+        return pd.read_csv(signals_path)
+    return None
 
 def load_stock_data(symbol):
     """Load historical data for a stock"""
@@ -106,333 +26,248 @@ def load_stock_data(symbol):
         return None
     
     try:
-        df = pd.read_csv(csv_path)
+        # Read CSV
+        raw_df = pd.read_csv(csv_path)
+        
+        # Remove completely empty columns
+        raw_df = raw_df.dropna(axis=1, how='all')
+        
+        # Keep only first occurrence of duplicate column names
+        raw_df = raw_df.loc[:, ~raw_df.columns.duplicated(keep='first')]
         
         # Standardize column names
-        df.columns = df.columns.str.upper()
+        raw_df.columns = raw_df.columns.str.strip().str.upper()
+        
+        # Create new clean dataframe
+        clean_df = pd.DataFrame()
         
         # Handle date column
-        if 'TIME' in df.columns:
-            df['DATE'] = pd.to_datetime(df['TIME'], format='%d-%b-%y', errors='coerce')
-        elif 'DATE' in df.columns:
-            df['DATE'] = pd.to_datetime(df['DATE'], errors='coerce')
+        if 'TIME' in raw_df.columns:
+            clean_df['DATE'] = pd.to_datetime(raw_df['TIME'], format='%d-%b-%y', errors='coerce')
+        elif 'DATE' in raw_df.columns:
+            clean_df['DATE'] = pd.to_datetime(raw_df['DATE'], errors='coerce')
+        else:
+            return None
         
-        # Remove rows with NaN dates
-        df = df.dropna(subset=['DATE'])
+        # Copy OHLCV columns
+        for col in ['OPEN', 'HIGH', 'LOW', 'CLOSE', 'VOLUME']:
+            if col in raw_df.columns:
+                clean_df[col] = pd.to_numeric(raw_df[col], errors='coerce')
+            else:
+                return None
+        
+        # Remove invalid rows
+        clean_df = clean_df.dropna(subset=['DATE', 'OPEN', 'HIGH', 'LOW', 'CLOSE'])
+        
+        if len(clean_df) == 0:
+            return None
         
         # Sort by date
-        df = df.sort_values('DATE', ascending=True)
+        clean_df = clean_df.sort_values('DATE').reset_index(drop=True)
         
-        return df
+        return clean_df
         
     except Exception as e:
-        st.error(f"Error loading {symbol}: {e}")
+        print(f"Error loading {symbol}: {e}")
         return None
-
 
 def create_candlestick_chart(df, symbol):
     """Create candlestick chart"""
-    
     if df is None or len(df) == 0:
         return None
     
-    fig = go.Figure(data=[go.Candlestick(
-        x=df['DATE'],
-        open=df['OPEN'],
-        high=df['HIGH'],
-        low=df['LOW'],
-        close=df['CLOSE'],
-        name=symbol
-    )])
+    try:
+        # Create figure
+        fig = go.Figure(data=[go.Candlestick(
+            x=df['DATE'].tolist(),
+            open=df['OPEN'].tolist(),
+            high=df['HIGH'].tolist(),
+            low=df['LOW'].tolist(),
+            close=df['CLOSE'].tolist(),
+            name=symbol
+        )])
+        
+        fig.update_layout(
+            title=f"{symbol} - Price History (Last 90 Days)",
+            xaxis_title="Date",
+            yaxis_title="Price (PKR)",
+            template="plotly_white",
+            height=500,
+            xaxis_rangeslider_visible=False
+        )
+        
+        return fig
+    except Exception as e:
+        print(f"Chart error for {symbol}: {e}")
+        return None
+
+def get_recommendation(percent_change, confidence, direction):
+    """Get trading recommendation"""
+    if direction == 'UP' and percent_change > 2 and confidence > 0.6:
+        return "🟢 Recommendation: STRONG BUY"
+    elif direction == 'UP' and percent_change > 0.5:
+        return "🟢 Recommendation: BUY"
+    elif direction == 'DOWN' and percent_change < -2 and confidence > 0.6:
+        return "🔴 Recommendation: STRONG SELL"
+    elif direction == 'DOWN' and percent_change < -0.5:
+        return "🔴 Recommendation: SELL"
+    else:
+        return "🟡 Recommendation: HOLD"
+
+def calculate_stats(df):
+    """Calculate key statistics"""
+    if df is None or len(df) == 0:
+        return None
     
-    fig.update_layout(
-        title=f"{symbol} - Price History (Last 90 Days)",
-        xaxis_title="Date",
-        yaxis_title="Price (PKR)",
-        template="plotly_white",
-        height=500,
-        xaxis_rangeslider_visible=False
-    )
+    df_30d = df.tail(30)
     
-    return fig
-
-
-def format_price(value):
-    """Safely format price"""
-    try:
-        return f"PKR {float(value):.2f}"
-    except:
-        return "N/A"
-
-
-def format_percentage(value):
-    """Safely format percentage"""
-    try:
-        return f"{float(value):+.2f}%"
-    except:
-        return "N/A"
-
-
-def format_confidence(value):
-    """Safely format confidence"""
-    try:
-        return f"{float(value):.1%}"
-    except:
-        return "N/A"
-
+    if len(df_30d) < 2:
+        return None
+    
+    stats = {
+        'return_30d': ((df_30d['CLOSE'].iloc[-1] / df_30d['CLOSE'].iloc[0]) - 1) * 100,
+        'avg_volume': df_30d['VOLUME'].mean(),
+        'volatility': df_30d['CLOSE'].std(),
+        'latest_volume': df_30d['VOLUME'].iloc[-1]
+    }
+    
+    return stats
 
 def main():
-    """Main dashboard function"""
-    
-    # Header
-    col1, col2, col3 = st.columns([2, 1, 1])
-    
-    with col1:
-        st.markdown('<p class="main-header">📊 PSX AI Trading System</p>', unsafe_allow_html=True)
-    
-    with col2:
-        now = datetime.now()
-        market_open = (now.hour >= 9 and now.hour < 15 and now.weekday() < 5)
-        if market_open:
-            st.success("🟢 Market OPEN")
-        else:
-            st.info("🔴 Market CLOSED")
-    
-    with col3:
-        st.metric("🕐 Time", now.strftime('%H:%M:%S'))
-    
-    # Check data freshness
-    signals_file = Path("reports/trading_signals.csv")
-    if signals_file.exists():
-        mod_time = datetime.fromtimestamp(signals_file.stat().st_mtime)
-        minutes_ago = int((datetime.now() - mod_time).total_seconds() / 60)
-        
-        if minutes_ago < 60:
-            st.caption(f"✓ Data updated {minutes_ago} minutes ago")
-        else:
-            hours_ago = minutes_ago // 60
-            st.warning(f"⚠️ Data is {hours_ago} hours old. Run: python update_live_signals.py")
-    
-    st.markdown("---")
-    
     # Sidebar
-    st.sidebar.title("📋 Navigation")
-    page = st.sidebar.radio(
-        "Select Page",
-        ["📊 Overview", "🎯 Trading Signals", "🔍 Stock Details"]
-    )
+    st.sidebar.title("🧭 Navigation")
+    page = st.sidebar.radio("Select Page", ["📊 Overview", "🎯 Trading Signals", "🔍 Stock Details"])
     
     st.sidebar.markdown("---")
-    st.sidebar.info("""
-    **PSX AI Trading System**
+    st.sidebar.markdown("### PSX AI Trading System")
+    st.sidebar.markdown("LSTM + XGBoost Models")
+    st.sidebar.markdown("Live price updates from Sarmaaya API")
     
-    LSTM + XGBoost Models
+    # Load signals
+    signals_df = load_signals()
     
-    Live price updates from Sarmaaya API
-    """)
-    
-    # Load data
-    with st.spinner("Loading predictions..."):
-        predictions_df = load_predictions()
-    
-    if len(predictions_df) == 0:
-        st.error("❌ No predictions found!")
-        st.info("""
-        **To generate predictions:**
-        1. Update live prices: `python update_live_signals.py`
-        2. Or train models: `python train_all.py --max 50`
-        """)
+    if signals_df is None:
+        st.error("⚠️ No trading signals found. Run: python update_live_signals.py")
         return
     
-    # PAGE: OVERVIEW
-    if page == "📊 Overview":
-        st.markdown("## 🤖 Model Predictions Overview")
-        
-        # Stats cards
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            st.metric("📈 Total Predictions", len(predictions_df))
-        
-        with col2:
-            buy_count = len(predictions_df[predictions_df.get('recommendation', '') == 'BUY'])
-            st.metric("🟢 BUY Signals", buy_count)
-        
-        with col3:
-            sell_count = len(predictions_df[predictions_df.get('recommendation', '') == 'SELL'])
-            st.metric("🔴 SELL Signals", sell_count)
-        
-        with col4:
-            avg_conf = predictions_df['confidence'].mean() * 100
-            st.metric("🎯 Avg Confidence", f"{avg_conf:.1f}%")
-        
-        st.markdown("---")
-        
-        # Predictions table
-        st.markdown("### 📋 All Predictions")
-        
-        # Create display dataframe
-        display_df = predictions_df.copy()
-        
-        # Format columns safely
-        display_df['Current Price'] = display_df['current_price'].apply(format_price)
-        display_df['Predicted Price'] = display_df['predicted_price'].apply(format_price)
-        display_df['Change %'] = display_df['change_pct'].apply(format_percentage)
-        display_df['Confidence'] = display_df['confidence'].apply(format_confidence)
-        display_df['Symbol'] = display_df['symbol']
-        display_df['Direction'] = display_df.get('direction', 'N/A')
-        display_df['Action'] = display_df.get('recommendation', 'HOLD')
-        
-        # Display table
-        st.dataframe(
-            display_df[['Symbol', 'Current Price', 'Predicted Price', 
-                       'Change %', 'Direction', 'Confidence', 'Action']],
-            height=600,
-            use_container_width=True
-        )
-        
-        # Download button
-        csv = predictions_df.to_csv(index=False)
-        st.download_button(
-            "📥 Download All Predictions (CSV)",
-            csv,
-            "psx_predictions.csv",
-            "text/csv",
-            key='download-csv'
-        )
+    # Header
+    st.title("📊 PSX AI Trading System")
     
-    # PAGE: TRADING SIGNALS
+    # Market status
+    now = datetime.now()
+    market_open = now.replace(hour=9, minute=30, second=0, microsecond=0)
+    market_close = now.replace(hour=15, minute=30, second=0, microsecond=0)
+    
+    is_market_open = market_open <= now <= market_close and now.weekday() < 5
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        if is_market_open:
+            st.success("🟢 Market OPEN")
+        else:
+            st.error("🔴 Market CLOSED")
+    
+    with col2:
+        st.metric("🕐 Time", now.strftime("%H:%M:%S"))
+    
+    with col3:
+        if 'last_update' in signals_df.columns and len(signals_df) > 0:
+            last_update = pd.to_datetime(signals_df['last_update'].iloc[0])
+            time_diff = now - last_update
+            if time_diff.seconds < 3600:
+                st.success(f"✓ Data updated {time_diff.seconds // 60} minutes ago")
+            else:
+                st.warning(f"⚠️ Data is {time_diff.seconds // 3600} hours old. Run: python update_live_signals.py")
+    
+    # Page content
+    if page == "📊 Overview":
+        st.header("📈 Top Predictions")
+        
+        # Show top gainers
+        top_gainers = signals_df.nlargest(10, 'percent_change')
+        
+        display_df = top_gainers[['symbol', 'current_price', 'predicted_price', 'percent_change', 'direction', 'confidence']].copy()
+        display_df['current_price'] = display_df['current_price'].apply(lambda x: f"PKR {x:.2f}")
+        display_df['predicted_price'] = display_df['predicted_price'].apply(lambda x: f"PKR {x:.2f}")
+        display_df['percent_change'] = display_df['percent_change'].apply(lambda x: f"{x:+.2f}%")
+        display_df['confidence'] = display_df['confidence'].apply(lambda x: f"{x*100:.1f}%")
+        
+        st.dataframe(display_df, use_container_width=True, hide_index=True)
+    
     elif page == "🎯 Trading Signals":
-        st.markdown("## 🎯 Trading Signals & Opportunities")
+        st.header("💡 Trading Signals")
         
         # Filters
-        col1, col2 = st.columns(2)
+        col1, col2, col3 = st.columns(3)
         
         with col1:
-            min_change = st.slider(
-                "Minimum Change %", 
-                -20.0, 20.0, 2.0, 0.5,
-                help="Filter stocks by minimum expected price change"
-            )
+            direction_filter = st.selectbox("Direction", ["All", "UP", "DOWN"])
         
         with col2:
-            min_confidence = st.slider(
-                "Minimum Confidence", 
-                0.0, 1.0, 0.3, 0.05,
-                format="%.0f%%",
-                help="Filter by model confidence level"
-            )
+            min_confidence = st.slider("Min Confidence", 0.0, 1.0, 0.5, 0.05)
         
-        st.markdown("---")
+        with col3:
+            min_change = st.slider("Min Change %", 0.0, 10.0, 0.0, 0.5)
         
-        # Filter data
-        filtered_df = predictions_df[
-            (predictions_df['change_pct'].abs() >= abs(min_change)) &
-            (predictions_df['confidence'] >= min_confidence)
-        ].copy()
+        # Apply filters
+        filtered_df = signals_df.copy()
         
-        # BUY Signals
-        st.markdown("### 🟢 BUY Opportunities")
-        buy_signals = filtered_df[filtered_df['change_pct'] > 0].sort_values(
-            'change_pct', ascending=False
-        ).head(20)
+        if direction_filter != "All":
+            filtered_df = filtered_df[filtered_df['direction'] == direction_filter]
         
-        if len(buy_signals) > 0:
-            buy_display = buy_signals.copy()
-            buy_display['Current'] = buy_display['current_price'].apply(format_price)
-            buy_display['Target'] = buy_display['predicted_price'].apply(format_price)
-            buy_display['Upside'] = buy_display['change_pct'].apply(format_percentage)
-            buy_display['Confidence'] = buy_display['confidence'].apply(format_confidence)
-            
-            st.dataframe(
-                buy_display[['symbol', 'Current', 'Target', 'Upside', 'Confidence']],
-                use_container_width=True
-            )
-        else:
-            st.info("No BUY signals match current filters")
+        filtered_df = filtered_df[filtered_df['confidence'] >= min_confidence]
+        filtered_df = filtered_df[abs(filtered_df['percent_change']) >= min_change]
         
-        st.markdown("---")
+        st.write(f"Found {len(filtered_df)} signals")
         
-        # SELL Signals
-        st.markdown("### 🔴 SELL Warnings")
-        sell_signals = filtered_df[filtered_df['change_pct'] < 0].sort_values(
-            'change_pct'
-        ).head(20)
+        display_df = filtered_df[['symbol', 'current_price', 'predicted_price', 'percent_change', 'direction', 'confidence']].copy()
+        display_df['current_price'] = display_df['current_price'].apply(lambda x: f"PKR {x:.2f}")
+        display_df['predicted_price'] = display_df['predicted_price'].apply(lambda x: f"PKR {x:.2f}")
+        display_df['percent_change'] = display_df['percent_change'].apply(lambda x: f"{x:+.2f}%")
+        display_df['confidence'] = display_df['confidence'].apply(lambda x: f"{x*100:.1f}%")
         
-        if len(sell_signals) > 0:
-            sell_display = sell_signals.copy()
-            sell_display['Current'] = sell_display['current_price'].apply(format_price)
-            sell_display['Target'] = sell_display['predicted_price'].apply(format_price)
-            sell_display['Downside'] = sell_display['change_pct'].apply(format_percentage)
-            sell_display['Confidence'] = sell_display['confidence'].apply(format_confidence)
-            
-            st.dataframe(
-                sell_display[['symbol', 'Current', 'Target', 'Downside', 'Confidence']],
-                use_container_width=True
-            )
-        else:
-            st.info("No SELL signals match current filters")
+        st.dataframe(display_df, use_container_width=True, hide_index=True)
     
-    # PAGE: STOCK DETAILS
-    elif page == "🔍 Stock Details":
-        st.markdown("## 🔍 Detailed Stock Analysis")
+    else:  # Stock Details
+        st.header("🔍 Detailed Stock Analysis")
         
         # Stock selector
-        available_stocks = sorted(predictions_df['symbol'].unique())
-        selected_stock = st.selectbox(
-            "Select Stock Symbol",
-            available_stocks,
-            help="Choose a stock to view detailed analysis"
-        )
+        stock_symbols = sorted(signals_df['symbol'].tolist())
+        selected_stock = st.selectbox("Select Stock Symbol", stock_symbols)
         
         if selected_stock:
-            # Get prediction
-            stock_data = predictions_df[predictions_df['symbol'] == selected_stock].iloc[0]
+            # Get stock data
+            stock_signal = signals_df[signals_df['symbol'] == selected_stock].iloc[0]
             
             # Display metrics
             col1, col2, col3, col4 = st.columns(4)
             
             with col1:
-                st.metric(
-                    "Current Price",
-                    format_price(stock_data['current_price'])
-                )
+                st.metric("Current Price", f"PKR {stock_signal['current_price']:.2f}")
             
             with col2:
-                change_val = stock_data['change_pct']
-                st.metric(
-                    "Predicted Price",
-                    format_price(stock_data['predicted_price']),
-                    format_percentage(change_val),
-                    delta_color="normal"
-                )
+                st.metric("Predicted Price", f"PKR {stock_signal['predicted_price']:.2f}",
+                         f"{stock_signal['percent_change']:.2f}%")
             
             with col3:
-                direction = stock_data.get('direction', 'NEUTRAL')
-                st.metric("Direction", direction)
+                st.metric("Direction", stock_signal['direction'])
             
             with col4:
-                conf_val = stock_data['confidence']
-                st.metric("Confidence", format_confidence(conf_val))
+                st.metric("Confidence", f"{stock_signal['confidence']*100:.1f}%")
             
-            # Recommendation box
-            rec = stock_data.get('recommendation', 'HOLD')
-            if rec == 'BUY':
-                st.success(f"🟢 **Recommendation: BUY**")
-            elif rec == 'SELL':
-                st.error(f"🔴 **Recommendation: SELL**")
-            else:
-                st.warning(f"🟡 **Recommendation: HOLD**")
-            
-            st.markdown("---")
+            # Recommendation
+            rec = get_recommendation(stock_signal['percent_change'], 
+                                   stock_signal['confidence'], 
+                                   stock_signal['direction'])
+            st.info(rec)
             
             # Load historical data
             historical_df = load_stock_data(selected_stock)
             
             if historical_df is not None and len(historical_df) > 0:
-                st.markdown("### 📈 Price Chart (Last 90 Days)")
-                
-                # Create chart
+                # Chart
+                st.subheader("📈 Price Chart (Last 90 Days)")
                 chart_df = historical_df.tail(90)
                 fig = create_candlestick_chart(chart_df, selected_stock)
                 
@@ -440,41 +275,29 @@ def main():
                     st.plotly_chart(fig, use_container_width=True)
                 
                 # Statistics
-                st.markdown("### 📊 Key Statistics")
+                st.subheader("📊 Key Statistics")
+                stats = calculate_stats(historical_df)
                 
-                col1, col2, col3, col4 = st.columns(4)
-                
-                with col1:
-                    if len(historical_df) >= 30:
-                        return_30d = (
-                            (historical_df['CLOSE'].iloc[-1] - historical_df['CLOSE'].iloc[-30]) 
-                            / historical_df['CLOSE'].iloc[-30] * 100
-                        )
-                        st.metric("30-Day Return", f"{return_30d:+.2f}%")
-                
-                with col2:
-                    avg_vol = historical_df['VOLUME'].tail(30).mean()
-                    st.metric("Avg Volume (30D)", f"{avg_vol:,.0f}")
-                
-                with col3:
-                    volatility = historical_df['CLOSE'].tail(30).std()
-                    st.metric("Volatility (30D)", f"{volatility:.2f}")
-                
-                with col4:
-                    latest_vol = historical_df['VOLUME'].iloc[-1]
-                    st.metric("Latest Volume", f"{latest_vol:,.0f}")
+                if stats:
+                    col1, col2, col3, col4 = st.columns(4)
+                    
+                    with col1:
+                        st.metric("30-Day Return", f"{stats['return_30d']:+.2f}%")
+                    
+                    with col2:
+                        st.metric("Avg Volume (30D)", f"{stats['avg_volume']:,.0f}")
+                    
+                    with col3:
+                        st.metric("Volatility (30D)", f"{stats['volatility']:.2f}")
+                    
+                    with col4:
+                        st.metric("Latest Volume", f"{stats['latest_volume']:,.0f}")
             else:
                 st.warning(f"No historical data available for {selected_stock}")
     
     # Footer
     st.markdown("---")
-    st.markdown(
-        f"<div style='text-align: center; color: #666;'>"
-        f"<small>PSX AI Trading System • Last Updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</small>"
-        f"</div>",
-        unsafe_allow_html=True
-    )
-
+    st.caption(f"PSX AI Trading System • Last Updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
 if __name__ == "__main__":
     main()

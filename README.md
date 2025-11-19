@@ -109,7 +109,7 @@ Contributions welcome! Please open an issue first.
 
 ## 📧 Contact
 
-Created by [Your Name] - [Your Email]
+Created by Gul Fayaz Rumi - gulfayazrumi5@gmail.com
 
 ---
 

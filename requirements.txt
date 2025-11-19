@@ -1,13 +1,6 @@
-# Core
-pandas==2.1.4
-numpy==1.24.3
-requests==2.31.0
-
-# Visualization
-plotly==5.18.0
-
-# Dashboard
-streamlit==1.31.0
-
-# Date utilities
-python-dateutil==2.8.2
+pandas
+numpy
+plotly
+streamlit
+requests
+python-dateutil

@@ -1,0 +1,159 @@
+# PSX Stock Predictor Configuration
+
+# Data Sources
+data:
+  sarmaaya_api:
+    base_url: "https://beta-restapi.sarmaaya.pk/api"
+    endpoints:
+      market_view: "/dashboard/market-view"
+      stock_performers: "/dashboard/stock-performers"
+      tickers: "/stocks/ticker"
+      price_history: "/stocks/price-history/{symbol}"
+    rate_limit: 60  # requests per minute
+  
+  indices:
+    - KSE100
+    - KSE30
+    - KMI30
+  
+  update_schedule:
+    frequency: "daily"  # daily, hourly
+    time: "18:00"  # After market close (PSX closes at 3:30 PM)
+
+# Features Engineering
+features:
+  technical_indicators:
+    - SMA_5
+    - SMA_10
+    - SMA_20
+    - SMA_50
+    - EMA_12
+    - EMA_26
+    - RSI_14
+    - MACD
+    - MACD_signal
+    - MACD_hist
+    - BB_upper
+    - BB_middle
+    - BB_lower
+    - ATR_14
+    - ADX_14
+    - CCI_20
+    - Stochastic_K
+    - Stochastic_D
+    - OBV
+    - Williams_R
+    
+  fundamental_indicators:
+    - market_cap
+    - pe_ratio
+    - pb_ratio
+    - dividend_yield
+    - volume_ratio
+    - price_change_pct
+    - sector_performance
+    
+  sentiment_features:
+    - volume_spike
+    - price_momentum
+    - relative_strength_index
+    - market_breadth
+
+  lookback_periods:
+    - 5   # 1 week
+    - 10  # 2 weeks
+    - 20  # 1 month
+    - 60  # 3 months
+
+# Model Configuration
+models:
+  lstm:
+    layers:
+      - units: 128
+        return_sequences: true
+      - units: 64
+        return_sequences: true
+      - units: 32
+        return_sequences: false
+    dropout: 0.2
+    learning_rate: 0.001
+    epochs: 100
+    batch_size: 32
+    validation_split: 0.2
+    
+  xgboost:
+    n_estimators: 200
+    max_depth: 7
+    learning_rate: 0.05
+    subsample: 0.8
+    colsample_bytree: 0.8
+    objective: "binary:logistic"  # For up/down classification
+    
+  ensemble:
+    lstm_weight: 0.6
+    xgboost_weight: 0.4
+
+# Training Configuration
+training:
+  test_size: 0.2
+  validation_size: 0.1
+  random_state: 42
+  cross_validation_folds: 5
+  
+  early_stopping:
+    patience: 15
+    min_delta: 0.001
+
+# Prediction Configuration
+prediction:
+  horizons:
+    - 1   # Next day
+    - 5   # 1 week
+  
+  confidence_threshold: 0.6
+  min_data_points: 100
+
+# API Configuration
+api:
+  host: "0.0.0.0"
+  port: 8000
+  reload: true
+  log_level: "info"
+  cors_origins:
+    - "http://localhost:3000"
+    - "http://localhost:8501"  # Streamlit
+
+# Dashboard Configuration
+dashboard:
+  port: 8501
+  theme: "dark"
+  refresh_interval: 300  # seconds
+
+# Logging
+logging:
+  level: "INFO"
+  format: "{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}"
+  rotation: "10 MB"
+  retention: "30 days"
+
+# Paths
+paths:
+  data_raw: "data/raw"
+  data_processed: "data/processed"
+  data_features: "data/features"
+  predictions: "data/predictions"
+  models: "models/saved"
+  logs: "logs"
+
+# Stock Selection
+stocks:
+  kse100_only: false  # If true, only trade KSE-100 stocks
+  min_volume: 10000   # Minimum daily volume
+  min_price: 5.0      # Minimum stock price (PKR)
+  
+# Risk Management
+risk:
+  max_drawdown: 0.15  # 15%
+  position_size: 0.05  # 5% per position
+  stop_loss: 0.05     # 5%
+  take_profit: 0.10   # 10%

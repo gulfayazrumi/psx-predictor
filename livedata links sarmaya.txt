@@ -1,0 +1,25 @@
+https://beta-restapi.sarmaaya.pk/api/dashboard/stock-divindend?page=1&limit=10
+
+https://beta-restapi.sarmaaya.pk/api/dashboard/stock-performers?type=active&page=1&limit=10
+https://beta-restapi.sarmaaya.pk/api/dashboard/stock-divindend?page=1&limit=100
+https://beta-restapi.sarmaaya.pk/api/dashboard/stock-performers?type=active&page=1&limit=100
+https://beta-restapi.sarmaaya.pk/api/dashboard/market-view
+
+Top P/E stock
+https://beta-restapi.sarmaaya.pk/api/stocks/ticker?index=KSE100
+
+Top P/B Stock
+https://sarmaaya.pk/stocks?valuation=Top+P%2FB+Stocks
+
+52 week higest stock
+https://beta-restapi.sarmaaya.pk/api/stocks/listing?valuation=52+Week+High+Stocks&page=1&limit=50
+
+52 week lowest stock:
+https://beta-restapi.sarmaaya.pk/api/stocks/listing?valuation=52+Week+Low+Stocks&page=1&limit=50
+
+Largest cap stock:
+https://beta-restapi.sarmaaya.pk/api/stocks/listing?valuation=Large+Cap+Stocks&page=1&limit=50
+
+Top dividend:
+
+https://beta-restapi.sarmaaya.pk/api/stocks/listing?valuation=Top+Dividend+Yield+Stocks&page=1&limit=50

@@ -1,0 +1,5 @@
+# Create empty .gitkeep files to preserve folder structure
+New-Item -ItemType File -Force -Path "data/raw/historical/.gitkeep"
+New-Item -ItemType File -Force -Path "models/saved/.gitkeep"
+New-Item -ItemType File -Force -Path "data/raw/snapshots/.gitkeep"
+New-Item -ItemType File -Force -Path "reports/history/.gitkeep"

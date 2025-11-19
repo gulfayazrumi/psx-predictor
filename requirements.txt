@@ -1,0 +1,89 @@
+# Core Data Science Libraries
+numpy==1.24.3
+pandas==2.0.3
+scikit-learn==1.3.0
+
+# Deep Learning
+tensorflow==2.13.0
+keras==2.13.1
+
+# Machine Learning
+xgboost==1.7.6
+lightgbm==4.0.0
+
+# Technical Indicators
+ta==0.11.0
+ta-lib==0.4.28
+pandas-ta==0.3.14b
+
+# Data Collection
+requests==2.31.0
+beautifulsoup4==4.12.2
+selenium==4.11.2
+aiohttp==3.8.5
+
+# API & Web Framework
+fastapi==0.100.0
+uvicorn==0.23.1
+pydantic==2.0.3
+
+# Dashboard
+streamlit==1.25.0
+plotly==5.15.0
+dash==2.11.1
+
+# Database
+sqlalchemy==2.0.19
+psycopg2-binary==2.9.6
+
+# Utilities
+python-dotenv==1.0.0
+pyyaml==6.0.1
+python-dateutil==2.8.2
+pytz==2023.3
+
+# Logging & Monitoring
+loguru==0.7.0
+mlflow==2.5.0
+
+# Testing
+pytest==7.4.0
+pytest-cov==4.1.0
+
+# Data Validation
+great-expectations==0.17.9
+
+# Jupyter
+jupyter==1.0.0
+ipykernel==6.25.0
+
+
+# Core
+pandas==2.1.4
+numpy==1.26.2
+requests==2.31.0
+
+# Machine Learning
+tensorflow==2.15.0
+scikit-learn==1.3.2
+xgboost==2.0.3
+
+# Visualization
+plotly==5.18.0
+matplotlib==3.8.2
+seaborn==0.13.0
+
+# Dashboard
+streamlit==1.31.0
+
+# Data Collection
+yfinance==0.2.33
+beautifulsoup4==4.12.2
+lxml==5.1.0
+
+# Technical Analysis
+ta==0.11.0
+
+# Utilities
+python-dateutil==2.8.2
+pytz==2023.3

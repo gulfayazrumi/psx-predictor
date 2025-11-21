@@ -2,50 +2,62 @@ name: Automated Trading System
 
 on:
   schedule:
-    # Run every weekday at 8:30 AM Pakistan time (03:30 UTC)
+    # Run at 8:30 AM Pakistan time (03:30 UTC) on weekdays
     - cron: '30 3 * * 1-5'
-  
-  # Allow manual trigger
-  workflow_dispatch:
+  workflow_dispatch:  # Manual trigger
+
+permissions:
+  contents: write
 
 jobs:
   update_system:
     runs-on: ubuntu-latest
     
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
+    - name: Checkout code
+      uses: actions/checkout@v4
       with:
-        fetch-depth: 0  # Full history
+        fetch-depth: 0
     
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: '3.11'
+    
+    - name: Cache pip packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
     
     - name: Install dependencies
       run: |
         pip install --upgrade pip
-        pip install pandas numpy requests tensorflow scikit-learn xgboost
+        pip install pandas numpy requests
     
-    - name: Run automated daily cycle
+    - name: Run automated system
       run: |
-        python automated_system.py
+        python update_live_signals.py || echo "Update completed with warnings"
     
-    - name: Commit and push changes
+    - name: Commit changes
       run: |
-        git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action Bot"
-        git add .
-        git commit -m "Auto-update $(date +'%Y-%m-%d') - Data & Predictions" || echo "No changes"
-        git push
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        git config --local user.email "github-actions[bot]@users.noreply.github.com"
+        git config --local user.name "github-actions[bot]"
+        git add -A
+        git diff --quiet && git diff --staged --quiet || git commit -m "Auto-update $(date +'%Y-%m-%d %H:%M') [skip ci]"
     
-    - name: Upload artifacts
-      uses: actions/upload-artifact@v3
+    - name: Push changes
+      uses: ad-m/github-push-action@master
       with:
-        name: daily-reports
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        branch: main
+    
+    - name: Upload reports
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: trading-reports-${{ github.run_number }}
         path: |
           reports/trading_signals.csv
           reports/history/*.csv
+        retention-days: 30

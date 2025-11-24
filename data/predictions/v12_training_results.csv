@@ -1,0 +1,2 @@
+symbol,status,reason
+HBL,ERROR,The column label 'date' is not unique.

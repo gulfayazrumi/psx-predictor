@@ -45,6 +45,13 @@ def clean_data(df):
     return df
 
 
+def remove_duplicate_columns(df):
+    """Remove duplicate columns from DataFrame"""
+    df = df.loc[:, ~df.columns.duplicated()]
+    return df
+
+
+
 def train_single_stock_v12(symbol, show_details=False):
     """Train v12 models for a single stock"""
     
@@ -62,6 +69,10 @@ def train_single_stock_v12(symbol, show_details=False):
         
         # Parse date
         df.columns = df.columns.str.lower()
+        
+        # Remove duplicate columns immediately
+        df = remove_duplicate_columns(df)
+        
         if 'time' in df.columns:
             df['date'] = pd.to_datetime(df['time'])
         

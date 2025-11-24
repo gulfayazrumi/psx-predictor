@@ -23,7 +23,7 @@ except ImportError:
 class LSTMPredictor:
     """LSTM model for stock price prediction"""
     
-    def __init__(self, config: Optional[Dict] = None, lookback: int = 60):
+    def __init__(self, config: Optional[Dict] = None, lookback: int = 60, model_type: str = 'lstm'):
         if not TENSORFLOW_AVAILABLE:
             raise ImportError("TensorFlow is required for LSTM model")
         
@@ -42,7 +42,13 @@ class LSTMPredictor:
         self.history = None
         
         # Model architecture from config
-        self.lstm_config = self.config['models']['lstm']
+        # Support v12_lstm if specified, otherwise default to lstm
+        if model_type == 'v12' and 'v12_lstm' in self.config['models']:
+            self.lstm_config = self.config['models']['v12_lstm']
+            print("Using v12 LSTM configuration")
+        else:
+            self.lstm_config = self.config['models']['lstm']
+            
         self.training_config = self.config['training']
     
     def prepare_sequences(self, data: np.ndarray, 
@@ -71,6 +77,8 @@ class LSTMPredictor:
         
         return np.array(X), np.array(y)
     
+        return model
+    
     def build_model(self, input_shape: Tuple[int, int]) -> Sequential:
         """
         Build LSTM model architecture
@@ -80,24 +88,40 @@ class LSTMPredictor:
         """
         model = Sequential(name='LSTM_Stock_Predictor')
         
+        # Determine which config to use
+        if 'v12_lstm' in self.config['models']:
+             # Use v12 config if available and we are in v12 mode (logic handled by caller or default to v12 if present?)
+             # For now, let's check if we were initialized with a specific config or just use the default 'lstm'
+             # But wait, the class uses self.lstm_config = self.config['models']['lstm'] in __init__
+             # I should update __init__ to allow selecting the model config.
+             pass
+
+        # Use the config that was set in __init__ (which defaults to 'lstm')
+        # To support v12, I should probably allow passing a model_type to __init__
+        # For now, I'll assume the caller will pass the specific config dict if they want v12, 
+        # OR I will modify __init__ to look for a 'model_type' arg.
+        
+        # Actually, let's just use whatever is in self.lstm_config. 
+        # I need to make sure self.lstm_config has the right values.
+        
         layers_config = self.lstm_config['layers']
         dropout = self.lstm_config['dropout']
         
         # Add LSTM layers
         for i, layer_conf in enumerate(layers_config):
-            if i == 0:
-                # First layer
-                model.add(LSTM(
-                    units=layer_conf['units'],
-                    return_sequences=layer_conf['return_sequences'],
-                    input_shape=input_shape
-                ))
+            # Check for bidirectional
+            is_bidirectional = layer_conf.get('bidirectional', False)
+            
+            lstm_layer = LSTM(
+                units=layer_conf['units'],
+                return_sequences=layer_conf['return_sequences'],
+                input_shape=input_shape if i == 0 else None
+            )
+            
+            if is_bidirectional:
+                model.add(Bidirectional(lstm_layer, input_shape=input_shape if i == 0 else None))
             else:
-                # Subsequent layers
-                model.add(LSTM(
-                    units=layer_conf['units'],
-                    return_sequences=layer_conf['return_sequences']
-                ))
+                model.add(lstm_layer)
             
             model.add(Dropout(dropout))
         

@@ -80,6 +80,23 @@ models:
     epochs: 100
     batch_size: 32
     validation_split: 0.2
+
+  v12_lstm:
+    layers:
+      - units: 256
+        return_sequences: true
+        bidirectional: true
+      - units: 128
+        return_sequences: true
+        bidirectional: true
+      - units: 64
+        return_sequences: false
+        bidirectional: false
+    dropout: 0.3
+    learning_rate: 0.0005
+    epochs: 150
+    batch_size: 32
+    validation_split: 0.2
     
   xgboost:
     n_estimators: 200

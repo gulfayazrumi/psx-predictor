@@ -155,6 +155,8 @@ def train_single_stock_v12(symbol, show_details=False):
         
         # Make prediction if both models succeeded
         prediction_result = None
+        weekly_forecast = None
+        
         if lstm_success and xgb_success:
             try:
                 ensemble = EnsemblePredictor()
@@ -169,8 +171,31 @@ def train_single_stock_v12(symbol, show_details=False):
                     'confidence': prediction['confidence'],
                     'recommendation': prediction['recommendation']
                 }
-            except:
-                pass
+                
+                # Generate weekly forecast
+                try:
+                    # Get recent data for LSTM
+                    recent_data = df_features[feature_cols].tail(60).values
+                    recent_data_scaled = lstm.feature_scaler.transform(recent_data)
+                    
+                    weekly_forecast = lstm.predict_next_week(recent_data_scaled, feature_cols)
+                    
+                    # Add dates to forecast
+                    last_date = pd.to_datetime(df['date'].iloc[-1])
+                    for i, day_pred in enumerate(weekly_forecast):
+                        # Add days (skipping weekends roughly)
+                        next_date = last_date + timedelta(days=i+1)
+                        if next_date.weekday() >= 5: # Sat/Sun
+                            next_date += timedelta(days=2)
+                        day_pred['date'] = next_date.strftime('%Y-%m-%d')
+                        day_pred['symbol'] = symbol
+                        
+                except Exception as e:
+                    print(f"    Weekly forecast failed: {e}")
+                    
+            except Exception as e:
+                if show_details:
+                    print(f"    Prediction failed: {e}")
         
         # Determine status
         if lstm_success and xgb_success:
@@ -187,7 +212,8 @@ def train_single_stock_v12(symbol, show_details=False):
             'features': len(df_features),
             'lstm': lstm_success,
             'xgboost': xgb_success,
-            'prediction': prediction_result
+            'prediction': prediction_result,
+            'weekly_forecast': weekly_forecast
         }
         
     except Exception as e:
@@ -263,21 +289,6 @@ def train_all_stocks_v12(stock_list=None, max_stocks=None, show_details=False):
     print(f"Total Stocks:      {total_stocks}")
     print(f"✓ Success:         {success_count}")
     print(f"⚠ Partial:         {partial_count}")
-    print(f"✗ Failed:          {fail_count}")
-    print(f"⊘ Skipped:         {skip_count}")
-    print(f"\nTotal Time:        {elapsed_total/60:.1f} minutes")
-    print(f"Average per stock: {elapsed_total/total_stocks:.1f} seconds")
-    
-    # Save results to CSV
-    results_df = pd.DataFrame(results)
-    results_path = Path("data/predictions/v12_training_results.csv")
-    results_path.parent.mkdir(parents=True, exist_ok=True)
-    results_df.to_csv(results_path, index=False)
-    print(f"\n✓ Results saved to: {results_path}")
-    
-    print("\n" + "="*70)
-    print("✅ v12 BATCH TRAINING COMPLETED")
-    print("="*70 + "\n")
     
     return results
 

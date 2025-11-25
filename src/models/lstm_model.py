@@ -290,17 +290,57 @@ class LSTMPredictor:
         # Load model
         model_path = filepath.with_suffix('.h5')
         self.model = load_model(model_path)
+        try:
+            self.model = keras.models.load_model(filepath)
+            
+            with open(f"{filepath}_scaler.pkl", 'rb') as f:
+                self.scaler = pickle.load(f)
+                
+            with open(f"{filepath}_feature_scaler.pkl", 'rb') as f:
+                self.feature_scaler = pickle.load(f)
+                
+            return True
+        except Exception as e:
+            print(f"Error loading model: {e}")
+            return False
+
+    def predict_next_week(self, recent_data: np.ndarray, feature_cols: List[str]) -> List[Dict]:
+        """
+        Predict prices for the next 5 days using recursive prediction
         
-        # Load scalers
-        scaler_path = filepath.with_suffix('.pkl')
-        with open(scaler_path, 'rb') as f:
-            data = pickle.load(f)
-            self.scaler = data['scaler']
-            self.feature_scaler = data['feature_scaler']
-            self.lookback = data['lookback']
+        Args:
+            recent_data: (lookback, n_features)
+            feature_cols: list of feature names
+        """
+        predictions = []
+        current_sequence = recent_data.copy()
         
-        print(f"✓ Model loaded from {model_path}")
-        print(f"✓ Scalers loaded from {scaler_path}")
+        # Get index of 'close' column
+        try:
+            close_idx = [i for i, col in enumerate(feature_cols) if 'close' in col.lower()][0]
+        except:
+            print("Could not find close column")
+            return []
+            
+        for i in range(5):
+            # Predict next day
+            pred_scaled = self.model.predict(current_sequence.reshape(1, self.lookback, -1), verbose=0)
+            pred_price = self.scaler.inverse_transform(pred_scaled)[0][0]
+            
+            predictions.append({
+                'day': i + 1,
+                'price': float(pred_price)
+            })
+            
+            # Update sequence for next prediction
+            new_row = current_sequence[-1].copy()
+            # Update the close price in the scaled domain
+            new_row[close_idx] = pred_scaled[0][0]
+            
+            # Shift and append
+            current_sequence = np.vstack([current_sequence[1:], new_row])
+            
+        return predictions
 
 
 def create_train_test_split(df: pd.DataFrame, 

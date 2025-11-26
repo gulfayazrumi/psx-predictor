@@ -287,17 +287,25 @@ class LSTMPredictor:
         """Load model and scalers"""
         filepath = Path(filepath)
         
-        # Load model
-        model_path = filepath.with_suffix('.h5')
-        self.model = load_model(model_path)
         try:
-            self.model = keras.models.load_model(filepath)
+            # Load model with compile=False to avoid metric issues
+            model_path = filepath.with_suffix('.h5')
+            self.model = keras.models.load_model(model_path, compile=False)
             
-            with open(f"{filepath}_scaler.pkl", 'rb') as f:
-                self.scaler = pickle.load(f)
-                
-            with open(f"{filepath}_feature_scaler.pkl", 'rb') as f:
-                self.feature_scaler = pickle.load(f)
+            # Recompile with simple metrics
+            self.model.compile(
+                optimizer='adam',
+                loss='mse',
+                metrics=['mae']
+            )
+            
+            # Load scalers from single pickle file
+            scaler_path = filepath.with_suffix('.pkl')
+            with open(scaler_path, 'rb') as f:
+                data = pickle.load(f)
+                self.scaler = data['scaler']
+                self.feature_scaler = data['feature_scaler']
+                self.lookback = data['lookback']
                 
             return True
         except Exception as e:

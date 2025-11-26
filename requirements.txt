@@ -1,6 +1,11 @@
 pandas
 numpy
-plotly
-streamlit
+tensorflow
+scikit-learn
+xgboost
+ta
 requests
-python-dateutil
+pyyaml
+streamlit
+plotly
+matplotlib

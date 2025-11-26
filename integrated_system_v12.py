@@ -391,23 +391,20 @@ class AutomatedTradingSystem:
     
     def update_predictions(self):
         """
-        Generate fresh predictions with latest prices using v12 models
+        Generate fresh predictions with LIVE market prices using v12 models
         """
         print("\n" + "="*70)
-        print("🎯 UPDATING PREDICTIONS (v12)")
+        print("🎯 UPDATING PREDICTIONS WITH LIVE PRICES")
         print("="*70)
         
-        # We need a script to update live signals using v12 models
-        # For now, we can reuse update_live_signals.py but we need to make sure it uses v12 models
-        # Or we can just rely on the training script's output for now if it generates predictions
-        # But ideally we want a separate prediction step.
-        
-        # TODO: Create a dedicated predict_v12.py or update update_live_signals.py
-        # For this iteration, since we are integrating, let's assume train_v12.py does the job for now
-        # as it saves results to data/predictions/v12_training_results.csv
-        
-        print("Note: Predictions are generated during training/evaluation phase.")
-        print("Check data/predictions/v12_training_results.csv")
+        try:
+            # Run the live signals update script
+            subprocess.run([sys.executable, 'update_live_signals.py'], check=True)
+            print("✓ Live signals updated in reports/trading_signals.csv")
+        except subprocess.CalledProcessError as e:
+            print(f"❌ Signal update failed: {e}")
+        except Exception as e:
+            print(f"❌ Error updating signals: {e}")
         
     def commit_to_github(self):
         """
@@ -448,15 +445,10 @@ class AutomatedTradingSystem:
         # 2. Create daily snapshot
         self.create_daily_snapshot()
         
-        # 3. Update predictions with latest prices
-        # This runs the prediction script which now also generates weekly forecasts
+        # 3. Update predictions with LIVE prices (no retraining needed!)
         self.update_predictions()
-        
-        # 4. Check if retraining needed
-        if self.check_if_retraining_needed():
-            self.retrain_models_background()
             
-        # 5. Calculate Accuracy
+        # 4. Calculate Accuracy
         try:
             from src.evaluation.accuracy_tracker import AccuracyTracker
             tracker = AccuracyTracker()
@@ -464,7 +456,7 @@ class AutomatedTradingSystem:
         except Exception as e:
             print(f"Error calculating accuracy: {e}")
         
-        # 6. Commit everything to GitHub
+        # 5. Commit everything to GitHub
         self.commit_to_github()
         
         print("\n" + "="*70)
@@ -473,9 +465,11 @@ class AutomatedTradingSystem:
         print(f"\n📊 Summary:")
         print(f"   ✓ Historical data updated")
         print(f"   ✓ Daily snapshot created")
-        print(f"   ✓ Predictions & Weekly Forecasts refreshed")
+        print(f"   ✓ Live Predictions updated (using existing models)")
         print(f"   ✓ Accuracy metrics updated")
         print(f"   ✓ Changes pushed to GitHub")
+        print(f"\n💡 Note: Models are NOT retrained daily.")
+        print(f"   To retrain: python train_v12.py --max 100")
         print("="*70 + "\n")
 
 if __name__ == "__main__":

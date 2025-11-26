@@ -21,7 +21,7 @@ st.markdown("""
         background-color: #f8f9fa;
     }
     .stMetric {
-        background-color: #ffffff;
+        background-color: rgb(0 0 0 / 75%);
         padding: 15px;
         border-radius: 10px;
         box-shadow: 0 2px 5px rgba(0,0,0,0.05);
@@ -76,8 +76,15 @@ def load_stock_history(symbol):
         
     try:
         df = pd.read_csv(csv_path)
+        
+        # Remove duplicate columns
+        df = df.loc[:, ~df.columns.duplicated()]
+        
         # Clean column names
         df.columns = df.columns.str.strip().str.lower()
+        
+        # Remove duplicate columns again after lowercasing
+        df = df.loc[:, ~df.columns.duplicated()]
         
         # Handle date
         if 'time' in df.columns:
@@ -229,12 +236,17 @@ def main():
         # Top Opportunities
         st.subheader("🔥 Top Trading Opportunities")
         
-        # Filter for high confidence
+        # Filter for high confidence (Relaxed threshold)
+        # Use > 0.6 instead of 0.7, or just take top 10 regardless of threshold if list is empty
         top_picks = signals_df[
-            (signals_df['confidence'] > 0.7) & 
-            (abs(signals_df['percent_change']) > 1.0)
+            (signals_df['confidence'] > 0.6) & 
+            (abs(signals_df['percent_change']) > 0.5)
         ].sort_values('confidence', ascending=False).head(10)
         
+        if len(top_picks) == 0:
+             # Fallback: just show top confidence ones
+             top_picks = signals_df.sort_values('confidence', ascending=False).head(10)
+
         st.dataframe(
             top_picks[['symbol', 'current_price', 'predicted_price', 'percent_change', 'direction', 'confidence', 'recommendation']],
             use_container_width=True,

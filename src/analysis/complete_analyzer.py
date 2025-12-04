@@ -32,13 +32,27 @@ def run_complete_market_analysis():
     print("-"*70)
     
     market = api.get_market_view()
-    if market:
-        kse100 = market.get('kse100', {})
-        print(f"KSE-100:        {kse100.get('value', 'N/A'):>10}")
-        print(f"Change:         {kse100.get('change', 0):>+10.2f} ({kse100.get('changePct', 0):>+6.2f}%)")
-        print(f"Gainers:        {market.get('gainers', 0):>10}")
-        print(f"Losers:         {market.get('losers', 0):>10}")
-        print(f"Unchanged:      {market.get('unchanged', 0):>10}")
+    if market and isinstance(market, list) and len(market) > 0:
+        # Find KSE-100 index
+        kse100 = None
+        for index in market:
+            if 'KSE' in index.get('name', '').upper() or index.get('symbol') == 'KSE100':
+                kse100 = index
+                break
+        
+        if kse100:
+            print(f"KSE-100:        {kse100.get('close', 'N/A'):>10}")
+            print(f"Change:         {kse100.get('change', 0):>+10.2f} ({kse100.get('changePercent', 0):>+6.2f}%)")
+        
+        # Count gainers/losers from all stocks
+        all_stocks = api.get_all_stocks(limit=100)
+        gainers = sum(1 for s in all_stocks if s.get('changePercent', 0) > 0)
+        losers = sum(1 for s in all_stocks if s.get('changePercent', 0) < 0)
+        unchanged = len(all_stocks) - gainers - losers
+        
+        print(f"Gainers:        {gainers:>10}")
+        print(f"Losers:         {losers:>10}")
+        print(f"Unchanged:      {unchanged:>10}")
         reports.append("✓ Market overview collected")
     else:
         reports.append("✗ Market overview failed")

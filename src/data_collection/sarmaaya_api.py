@@ -156,7 +156,7 @@ class SarmayaAPI:
         
         return []
     
-    def get_large_cap_stocks(self, limit: int = 50) -> List[Dict]:
+    def get_large_cap_stocks(self, limit: int = 50) -> pd.DataFrame:
         """Get large cap stocks"""
         
         data = self._make_request(
@@ -169,9 +169,10 @@ class SarmayaAPI:
         )
         
         if data and data.get('success'):
-            return data.get('response', {}).get('data', [])
+            stocks = data.get('response', {}).get('data', [])
+            return pd.DataFrame(stocks) if stocks else pd.DataFrame()
         
-        return []
+        return pd.DataFrame()
     
     def get_dividend_stocks(self, page: int = 1, limit: int = 50) -> List[Dict]:
         """Get dividend stocks"""
@@ -250,6 +251,92 @@ class SarmayaAPI:
             return data.get('response', {}).get('data', [])
         
         return []
+    
+    def get_sector_performance(self) -> Optional[pd.DataFrame]:
+        """Get sector performance data"""
+        
+        data = self._make_request("sectors/list")
+        
+        if data and data.get('success'):
+            response = data.get('response', {})
+            sectors = response.get('sectors', [])
+            if sectors:
+                df = pd.DataFrame(sectors)
+                # Rename columns to match expected format
+                if 'name' in df.columns:
+                    df['sector'] = df['name']
+                if 'changePercent' in df.columns:
+                    # Convert string to float
+                    df['change_pct'] = pd.to_numeric(df['changePercent'], errors='coerce')
+                if 'marketCap' in df.columns:
+                    df['market_cap'] = df['marketCap']
+                if 'volume' in df.columns:
+                    df['volume'] = pd.to_numeric(df['volume'], errors='coerce')
+                return df
+        
+        return None
+
+    
+    def get_stock_info(self, symbol: str) -> Optional[Dict]:
+        """Get detailed stock information"""
+        
+        # Try to get from all stocks listing
+        stocks = self.get_all_stocks(limit=500)
+        for stock in stocks:
+            if stock.get('symbol') == symbol:
+                # Map to expected format
+                return {
+                    'currentPrice': stock.get('close', 0),
+                    'changePct': stock.get('changePercent', 0),
+                    'volume': stock.get('volume', 0),
+                    'peRatio': stock.get('peRatio', 0),
+                    'dividendYield': stock.get('dividendYield', 0),
+                    'marketCap': stock.get('marketCap', 0)
+                }
+        
+        return None
+    
+    def get_price_history(self, symbol: str, days: int = 365) -> Optional[pd.DataFrame]:
+        """Alias for get_stock_history"""
+        return self.get_stock_history(symbol, days)
+    
+    def get_market_view(self) -> Optional[Dict]:
+        """Get market overview"""
+        
+        data = self._make_request("dashboard/market-view")
+        
+        if data and data.get('success'):
+            return data.get('response', {})
+        
+        return None
+    
+    def get_52week_high_stocks(self, limit: int = 50) -> pd.DataFrame:
+        """Get stocks at 52-week highs (returns DataFrame)"""
+        
+        stocks = self.get_52_week_highs(limit)
+        return pd.DataFrame(stocks) if stocks else pd.DataFrame()
+    
+    def get_52week_low_stocks(self, limit: int = 50) -> pd.DataFrame:
+        """Get stocks at 52-week lows (returns DataFrame)"""
+        
+        stocks = self.get_52_week_lows(limit)
+        return pd.DataFrame(stocks) if stocks else pd.DataFrame()
+    
+    def get_top_dividend_stocks(self, limit: int = 50) -> pd.DataFrame:
+        """Get top dividend stocks (returns DataFrame)"""
+        
+        stocks = self.get_dividend_stocks(limit=limit)
+        return pd.DataFrame(stocks) if stocks else pd.DataFrame()
+    
+    def get_stock_sector(self, symbol: str) -> Optional[str]:
+        """Get sector for a stock"""
+        
+        info = self.get_stock_info(symbol)
+        if info:
+            return info.get('sector', None)
+        
+        return None
+
 
 
 # Test function

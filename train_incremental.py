@@ -65,8 +65,8 @@ def main():
     
     results = []
     
-    for i, symbol in enumerate(untrained, 1):
-        print(f"\n[{i}/{len(untrained)}] Processing {symbol}...", end=' ', flush=True)
+    for i, symbol in enumerate(untrained, trained_count + 1):
+        print(f"\n[{i}/{total_count}] Processing {symbol}...", end=' ', flush=True)
         
         result = train_single_stock_v12(symbol, show_details=args.details)
         results.append(result)

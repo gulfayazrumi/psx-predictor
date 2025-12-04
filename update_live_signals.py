@@ -15,6 +15,7 @@ from src.models.lstm_model import LSTMPredictor
 from src.models.xgboost_model import XGBoostDirectionPredictor
 from src.models.ensemble import EnsemblePredictor
 from src.preprocessing.feature_engineer import FeatureEngineer
+from src.data_collection.data_updater import DataUpdater
 
 def get_live_prices():
     """Fetch live prices from Sarmaaya API"""
@@ -48,7 +49,7 @@ def get_live_prices():
     print(f"✓ Got live prices for {len(live_prices)} stocks")
     return live_prices
 
-def predict_with_models(symbol, models_dir):
+def predict_with_models(symbol, models_dir, live_data=None):
     """Generate prediction using v12 models"""
     try:
         # Load historical data for features
@@ -66,6 +67,29 @@ def predict_with_models(symbol, models_dir):
             df['date'] = pd.to_datetime(df['date'])
             
         df = df.sort_values('date')
+        
+        # Inject LIVE data if provided
+        if live_data:
+            current_date = pd.Timestamp.now().normalize()
+            last_date = df['date'].iloc[-1]
+            
+            new_row = {
+                'date': current_date,
+                'open': float(live_data['open']) if live_data['open'] else float(live_data['current_price']),
+                'high': float(live_data['high']) if live_data['high'] else float(live_data['current_price']),
+                'low': float(live_data['low']) if live_data['low'] else float(live_data['current_price']),
+                'close': float(live_data['current_price']),
+                'volume': float(live_data['volume']) if live_data['volume'] else 0
+            }
+            
+            # If last row is today, update it. Otherwise append.
+            if last_date.date() == current_date.date():
+                for col, val in new_row.items():
+                    if col in df.columns:
+                        df.iloc[-1, df.columns.get_loc(col)] = val
+            else:
+                # Append new row
+                df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
         
         if len(df) < 60:
             return None
@@ -101,6 +125,23 @@ def predict_with_models(symbol, models_dir):
         # Predict
         prediction = ensemble.predict_next_day(df_features, feature_cols_xgb)
         
+        # Sanity Check: Clamp extreme predictions
+        if prediction:
+            current_price = float(live_data['current_price']) if live_data else df['close'].iloc[-1]
+            predicted_price = prediction['predicted_price']
+            
+            # Calculate change
+            change_pct = ((predicted_price - current_price) / current_price) * 100
+            
+            # If change is > 15% or < -15%, clamp it (circuit breakers are usually 7.5% or 10%)
+            # We'll be a bit generous but filter out crazy outliers
+            if abs(change_pct) > 15:
+                # Clamp to max 15% change
+                direction = 1 if change_pct > 0 else -1
+                clamped_price = current_price * (1 + (0.15 * direction))
+                prediction['predicted_price'] = clamped_price
+                prediction['confidence'] = prediction['confidence'] * 0.5  # Reduce confidence for outliers
+        
         return prediction
         
     except Exception as e:
@@ -126,6 +167,9 @@ def main():
     
     print(f"\n🤖 Generating predictions for {len(stocks_with_models)} stocks...")
     
+    # Initialize Data Updater
+    updater = DataUpdater()
+    
     signals = []
     
     for i, symbol in enumerate(stocks_with_models, 1):
@@ -138,8 +182,15 @@ def main():
             
         live_data = live_prices[symbol]
         
-        # Get prediction
-        prediction = predict_with_models(symbol, models_dir)
+        # Update historical data if needed (fill gaps)
+        try:
+            if updater.update_history(symbol):
+                print("(updated history)", end=' ')
+        except Exception as e:
+            print(f"(update failed: {e})", end=' ')
+        
+        # Get prediction - PASS LIVE DATA
+        prediction = predict_with_models(symbol, models_dir, live_data)
         
         if prediction:
             # Recalculate metrics using LIVE price
@@ -199,10 +250,16 @@ def main():
         output_path.parent.mkdir(parents=True, exist_ok=True)
         df.to_csv(output_path, index=False)
         
+        # Also save to history for accuracy tracking
+        history_path = Path(f"reports/history/predictions_{datetime.now().strftime('%Y-%m-%d')}.csv")
+        history_path.parent.mkdir(parents=True, exist_ok=True)
+        df.to_csv(history_path, index=False)
+        
         print(f"\n✅ Saved {len(signals)} live signals to {output_path}")
+        print(f"✅ Saved history to {history_path}")
         print(f"📊 Signals include:")
         print(f"   - LIVE current prices from market")
-        print(f"   - AI predictions for tomorrow")
+        print(f"   - AI predictions for tomorrow (using LIVE input)")
         print(f"   - Updated at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     else:
         print("\n⚠️ No signals generated.")

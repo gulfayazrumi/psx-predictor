@@ -350,29 +350,23 @@ class AutomatedTradingSystem:
     
     def retrain_models_v12(self):
         """
-        Retrain v12 models
+        Retrain v12 models using incremental training (does not delete existing models)
         """
         print("\n" + "="*70)
-        print("🔄 STARTING v12 MODEL RETRAINING")
+        print("🔄 STARTING v12 MODEL RETRAINING (INCREMENTAL)")
         print("="*70)
         
-        # Create model version backup
-        version_dir = self.base_path / f"models/v12/versions/v_{self.today}"
-        version_dir.mkdir(parents=True, exist_ok=True)
+        # Create model version backup (optional, maybe skip to save space)
+        # version_dir = self.base_path / f"models/v12/versions/v_{self.today}"
+        # version_dir.mkdir(parents=True, exist_ok=True)
         
-        # Backup current models
-        saved_dir = self.base_path / "models/v12"
-        if saved_dir.exists():
-            for model_file in saved_dir.glob("*.h5"):
-                shutil.copy2(model_file, version_dir / model_file.name)
+        print("\n🚀 Starting incremental training...")
         
-        print("✓ Current models backed up")
-        print("\n🚀 Starting retraining...")
-        
-        # Run training script
-        subprocess.run([sys.executable, 'train_v12.py', '--max', '400'])
+        # Run incremental training script
+        # This script checks for existing models and skips them, so it's safe to run repeatedly.
+        subprocess.run([sys.executable, 'train_incremental.py', '--batch', '50'])
                 
-        print("✓ Training completed")
+        print("✓ Training batch completed")
         
         # Update training log
         with open(self.base_path / "models/v12/last_training.txt", 'w') as f:
@@ -381,13 +375,12 @@ class AutomatedTradingSystem:
     def retrain_models_background(self):
         """
         Placeholder for background retraining logic.
-        For now, it will call the existing v12 retraining.
         """
         print("\n" + "="*70)
         print("🔄 STARTING MODEL RETRAINING (BACKGROUND)")
         print("="*70)
-        self.retrain_models_v12() # Call the existing retraining logic
-        print("✓ Background retraining initiated (or completed).")
+        self.retrain_models_v12()
+        print("✓ Background retraining initiated.")
     
     def update_predictions(self):
         """
@@ -399,8 +392,16 @@ class AutomatedTradingSystem:
         
         try:
             # Run the live signals update script
+            # This script now injects LIVE data into the model input for accurate next-day prediction
             subprocess.run([sys.executable, 'update_live_signals.py'], check=True)
             print("✓ Live signals updated in reports/trading_signals.csv")
+            
+            # Also run verification if possible
+            try:
+                subprocess.run([sys.executable, 'src/evaluation/verify_predictions.py'], check=False)
+            except:
+                pass
+                
         except subprocess.CalledProcessError as e:
             print(f"❌ Signal update failed: {e}")
         except Exception as e:
